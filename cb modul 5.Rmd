@@ -1,0 +1,258 @@
+---
+title: "MODUL 5 - “Analisis Structural Equation Modeling Partial Least Squares (SEM-PLS) pada Perilaku Penggunaan Instagram dan Dampaknya terhadap Mental Health serta Lifestyle”"
+author: "Celine Nurhidayah Santoso,
+         Dista Ishlahul Amalia,
+         Dessy Saputri"
+date: "2026-05-21"
+output: html_document
+---
+```{r, echo=FALSE, results='asis'}
+cat("
+<style>
+body {
+  font-family: 'Times New Roman' !important;
+  font-size: 12pt;
+}
+h1, h2, h3 {
+  font-family: 'Times New Roman' !important;
+  font-weight: bold;
+}
+pre, code {
+  font-family: 'Times New Roman' !important;
+}
+</style>
+")
+```
+# INSTALL PACKAGE
+```{r eval=FALSE}
+install.packages("seminr")
+install.packages("readr")
+install.packages("dplyr")
+install.packages("psych")
+install.packages("corrplot")
+install.packages("ggplot2")
+```
+
+# LOAD LIBRARY
+```{r}
+library(seminr)
+library(readr)
+library(dplyr)
+library(psych)
+library(corrplot)
+library(ggplot2)
+```
+
+# IMPORT DATA
+```{r}
+data <- read_csv("instagram_usage_lifestyle.csv")
+
+head(data)
+str(data)
+```
+
+# FEATURE SELECTION
+```{r}
+sem_data <- data %>%
+  select(
+
+    # DOOMSCROLLING
+    daily_active_minutes_instagram,
+    sessions_per_day,
+    reels_watched_per_day,
+    stories_viewed_per_day,
+    time_on_feed_per_day,
+    time_on_explore_per_day,
+    time_on_reels_per_day,
+
+    # ENGAGEMENT
+    likes_given_per_day,
+    comments_written_per_day,
+    dms_sent_per_week,
+    dms_received_per_week,
+
+    # MENTAL HEALTH
+    perceived_stress_score,
+    self_reported_happiness,
+
+    # LIFESTYLE
+    daily_steps_count,
+    exercise_hours_per_week,
+    hobbies_count
+  )
+```
+
+# REVERSE CODING HAPPINESS
+```{r}
+sem_data <- sem_data %>%
+  mutate(
+    happiness_reverse =
+      max(self_reported_happiness, na.rm = TRUE) -
+      self_reported_happiness
+  )
+```
+
+# RENAME VARIABLE
+```{r}
+sem_data <- sem_data %>%
+  rename(
+
+    # DOOMSCROLLING
+    DOOM1 = daily_active_minutes_instagram,
+    DOOM2 = sessions_per_day,
+    DOOM3 = reels_watched_per_day,
+    DOOM4 = stories_viewed_per_day,
+    DOOM5 = time_on_feed_per_day,
+    DOOM6 = time_on_explore_per_day,
+    DOOM7 = time_on_reels_per_day,
+
+    # ENGAGEMENT
+    ENG1 = likes_given_per_day,
+    ENG2 = comments_written_per_day,
+    ENG3 = dms_sent_per_week,
+    ENG4 = dms_received_per_week,
+
+    # MENTAL HEALTH
+    MH1 = perceived_stress_score,
+    MH2 = happiness_reverse,
+
+    # LIFESTYLE
+    LIFE1 = daily_steps_count,
+    LIFE2 = exercise_hours_per_week,
+    LIFE3 = hobbies_count
+  )
+
+colnames(sem_data)
+```
+
+# HANDLING MISSING VALUE
+```{r}
+colSums(is.na(sem_data))
+
+sem_data <- na.omit(sem_data)
+```
+
+# SAMPLING DATA
+```{r}
+set.seed(123)
+
+sample_size <- min(5000, nrow(sem_data))
+
+sem_data_sample <- sem_data %>%
+  sample_n(sample_size)
+```
+
+# DESCRIPTIVE STATISTICS
+```{r}
+describe(sem_data_sample)
+```
+
+# CORRELATION MATRIX
+```{r}
+cor_matrix <- cor(sem_data_sample)
+
+corrplot(cor_matrix,
+         method = "color",
+         type = "upper",
+         tl.cex = 0.8)
+```
+
+# MEASUREMENT MODEL
+```{r}
+measurement_model <- constructs(
+
+  # DOOMSCROLLING
+  composite(
+    "DOOM",
+    multi_items("DOOM", 1:7)
+  ),
+
+  # ENGAGEMENT
+  composite(
+    "ENGAGEMENT",
+    multi_items("ENG", 1:4)
+  ),
+
+  # MENTAL HEALTH
+  composite(
+    "MENTAL_HEALTH",
+    multi_items("MH", 1:2)
+  ),
+
+  # LIFESTYLE
+  composite(
+    "LIFESTYLE",
+    multi_items("LIFE", 1:3)
+  )
+)
+```
+
+# STRUCTURAL MODEL
+```{r}
+structural_model <- relationships(
+
+  # DOOM -> ENGAGEMENT
+  paths(from = "DOOM",
+        to = "ENGAGEMENT"),
+
+  # DOOM -> MENTAL HEALTH
+  paths(from = "DOOM",
+        to = "MENTAL_HEALTH"),
+
+  # ENGAGEMENT -> MENTAL HEALTH
+  paths(from = "ENGAGEMENT",
+        to = "MENTAL_HEALTH"),
+
+  # MENTAL HEALTH -> LIFESTYLE
+  paths(from = "MENTAL_HEALTH",
+        to = "LIFESTYLE")
+)
+```
+
+# ESTIMATE SEM-PLS MODEL
+```{r}
+pls_model <- estimate_pls(
+  data = sem_data_sample,
+  measurement_model = measurement_model,
+  structural_model = structural_model
+)
+```
+
+# MODEL SUMMARY
+```{r}
+summary(pls_model)
+```
+
+# OUTER LOADINGS
+```{r}
+pls_model$outer_loadings
+```
+
+# R-SQUARE
+```{r}
+summary(pls_model)$r_squared
+```
+
+# RELIABILITY & VALIDITY
+```{r}
+summary(pls_model)$reliability
+```
+
+# BOOTSTRAPPING
+```{r}
+boot_model <- bootstrap_model(
+  seminr_model = pls_model,
+  nboot = 1000,
+  cores = parallel::detectCores() - 1
+)
+```
+
+# BOOTSTRAP SUMMARY
+```{r}
+summary(boot_model)
+```
+
+# VISUALISASI MODEL
+```{r}
+plot(pls_model)
+```
